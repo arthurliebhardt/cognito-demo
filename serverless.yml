@@ -1,0 +1,113 @@
+service: cognito-demo
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  versionFunctions: false
+  region: ap-southeast-2
+  stage: production
+  description: AWS Cognito demo
+  memorySize: 128
+  tracing: true
+  logRetentionInDays: 30
+
+plugins:
+  - serverless-finch
+  - serverless-pseudo-parameters
+
+custom:
+  client:
+    bucketName:
+      Ref: "cognito-demo-#{AWS::Region}"
+
+functions:
+  hello:
+    handler: server/aws.index
+    events:
+    # /ping - Unauthenticated endpoint
+    - http:
+        path: /ping
+        method: GET
+        cors: true
+    # /echo - Authenticated endpoint, requires "atlas/base" scope
+    - http:
+        path: /echo
+        method: GET
+        cors: true
+        authorizer:
+          type: COGNITO_USER_POOLS
+          authorizerId:
+            Ref: ApiGatewayAuthorizer
+        # Note: 'ApiGatewayMethodEchoGet' in resources section below
+
+package:
+  exclude:
+    - spa/**
+
+resources:
+  Resources:
+    # Serverless framework workaround to specify required scope for authorizer
+    # https://github.com/serverless/serverless/issues/4661
+    ApiGatewayMethodEchoGet:
+      Type: "AWS::ApiGateway::Method"
+      Properties:
+        AuthorizationScopes:
+        - "atlas/base"
+    # API Gateway's built-in Cognito authentication doesn't set CORS
+    # headers on HTTP 401 responses, this fixes that
+    GatewayResponse:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'*'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+    # API Gateway Authorizer
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        Name: ApiGatewayAuthorizer
+        ProviderARNs:
+        - Fn::GetAtt:
+          - tenant1Pool
+          - Arn
+        - Fn::GetAtt:
+          - tenant2Pool
+          - Arn
+    # User Pool for first tenant
+    tenant1Pool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: "First tenant"
+    # User Pool for second tenant
+    tenant2Pool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: "Second tenant"
+    # Other-application client - requires additional configuration (see README)
+    m2mClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        UserPoolId:
+          Ref: tenant1Pool
+        GenerateSecret: true
+    # Interactive webapp - requires additional configuration (see README)
+    spaClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        UserPoolId:
+          Ref: tenant1Pool
+    # DevOps sample user
+    devOpsGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: "DevOpsTeam"
+        UserPoolId:
+          Ref: tenant1Pool

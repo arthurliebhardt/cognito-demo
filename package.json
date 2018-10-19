@@ -1,0 +1,14 @@
+{
+  "name": "cognito-demo",
+  "version": "1.0.0",
+  "dependencies": {
+    "aws-serverless-express": "^3.3.5",
+    "client-oauth2": "^4.2.1",
+    "cors": "^2.8.4",
+    "express": "^4.16.3",
+    "jsonwebtoken": "^8.3.0",
+    "serverless-finch": "^2.3.2",
+    "serverless-pseudo-parameters": "^2.2.0",
+    "superagent": "^4.0.0-beta.5"
+  }
+}
